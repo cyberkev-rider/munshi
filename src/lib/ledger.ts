@@ -61,12 +61,10 @@ export function signedAmount(tx: Pick<Transaction, "amount_paise" | "direction">
  * (is_deleted === true) are excluded. The result is never stored — always
  * recompute from the transaction list.
  *
- * A positive balance means the party owes the shop owner money (net
- * received is negative from the party's perspective... concretely: the shop
- * owner has received more than they paid, e.g. a customer who still owes
- * money conceptually shows here as the shop tracking what's due). Sign
- * convention: positive = net money IN to the shop owner, negative = net
- * money OUT.
+ * Sign convention: positive = net money IN to the shop owner, negative =
+ * net money OUT. Interpretation follows the Khatabook udhaar convention
+ * (see theyOweYou): a NEGATIVE balance (owner gave more than they got back)
+ * means the party owes the owner.
  */
 export function computeBalance(
   transactions: readonly Pick<Transaction, "amount_paise" | "direction" | "is_deleted">[]
@@ -123,7 +121,13 @@ export function formatPaiseToRupees(paise: number): string {
   return `${sign}₹${formatted}`;
 }
 
-/** Whether a balance is "positive" (net received) for color-coding purposes. */
-export function isPositiveBalance(balancePaise: number): boolean {
-  return balancePaise >= 0;
+/**
+ * Khatabook-style udhaar convention: money the owner GAVE ("paid") is credit
+ * the party owes back; money the owner RECEIVED reduces (or reverses) that.
+ * So the party owes the owner when paid > received — i.e. when the net
+ * balance (received - paid) is NEGATIVE. Zero counts as "they owe you" only
+ * for color purposes; callers should special-case zero for a "settled" label.
+ */
+export function theyOweYou(balancePaise: number): boolean {
+  return balancePaise <= 0;
 }

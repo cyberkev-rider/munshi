@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { formatPaiseToRupees, isPositiveBalance } from "@/lib/ledger";
+import { formatPaiseToRupees, theyOweYou } from "@/lib/ledger";
 import { useI18n } from "@/lib/i18n-context";
 import { PersonIcon } from "./icons";
 import type { Party } from "@/lib/types";
@@ -17,7 +17,7 @@ interface PartyRowProps {
  * entries themselves, per the spec, so this row keeps to color + text. */
 export function PartyRow({ party, balancePaise }: PartyRowProps) {
   const { t } = useI18n();
-  const positive = isPositiveBalance(balancePaise);
+  const owesYou = theyOweYou(balancePaise);
   const isZero = balancePaise === 0;
 
   return (
@@ -36,7 +36,7 @@ export function PartyRow({ party, balancePaise }: PartyRowProps) {
           <span className="block text-sm text-neutral-400">{t.home.settled}</span>
         ) : (
           <span className="block text-sm text-neutral-400">
-            {positive ? t.home.balanceTheyOwe : t.home.balanceYouOwe}
+            {owesYou ? t.home.balanceTheyOwe : t.home.balanceYouOwe}
           </span>
         )}
       </span>
@@ -44,7 +44,7 @@ export function PartyRow({ party, balancePaise }: PartyRowProps) {
         className={`amount-numerals shrink-0 text-xl font-bold ${
           isZero
             ? "text-neutral-400"
-            : positive
+            : owesYou
               ? "text-green-600"
               : "text-red-600"
         }`}

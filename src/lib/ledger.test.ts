@@ -8,7 +8,7 @@ import {
   totalReceived,
   totalPaid,
   formatPaiseToRupees,
-  isPositiveBalance,
+  theyOweYou,
 } from "./ledger";
 import type { Transaction } from "./types";
 
@@ -190,16 +190,16 @@ describe("formatPaiseToRupees", () => {
   });
 });
 
-describe("isPositiveBalance", () => {
-  it("treats zero as positive (green) for color-coding", () => {
-    expect(isPositiveBalance(0)).toBe(true);
+describe("theyOweYou (Khatabook udhaar convention)", () => {
+  it("money the owner gave (net paid, negative balance) means they owe you", () => {
+    expect(theyOweYou(-100)).toBe(true);
   });
 
-  it("treats positive paise as positive", () => {
-    expect(isPositiveBalance(100)).toBe(true);
+  it("money the owner received (net received, positive balance) means you owe them", () => {
+    expect(theyOweYou(100)).toBe(false);
   });
 
-  it("treats negative paise as not positive", () => {
-    expect(isPositiveBalance(-100)).toBe(false);
+  it("treats zero as they-owe-you (green) for color-coding only", () => {
+    expect(theyOweYou(0)).toBe(true);
   });
 });

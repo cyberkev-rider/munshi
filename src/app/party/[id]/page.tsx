@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n-context";
 import { usePartyLedger } from "@/lib/useLedgerData";
 import { getParty, softDeleteTransaction, undoDeleteTransaction } from "@/lib/repo";
-import { formatPaiseToRupees, isPositiveBalance } from "@/lib/ledger";
+import { formatPaiseToRupees, theyOweYou } from "@/lib/ledger";
 import { useSnackbar } from "@/components/Snackbar";
 import { TransactionRow } from "@/components/TransactionRow";
 import { BackIcon, PlusIcon } from "@/components/icons";
@@ -39,7 +39,7 @@ export default function PartyLedgerPage() {
     });
   }
 
-  const positive = isPositiveBalance(balancePaise);
+  const owesYou = theyOweYou(balancePaise);
   const isZero = balancePaise === 0;
 
   return (
@@ -62,14 +62,14 @@ export default function PartyLedgerPage() {
         <span className="text-sm text-neutral-400">{t.ledger.balanceTitle}</span>
         <span
           className={`amount-numerals text-4xl font-extrabold ${
-            isZero ? "text-neutral-500" : positive ? "text-green-600" : "text-red-600"
+            isZero ? "text-neutral-500" : owesYou ? "text-green-600" : "text-red-600"
           }`}
         >
           {formatPaiseToRupees(Math.abs(balancePaise))}
         </span>
         {!isZero && (
           <span className="text-sm font-medium text-neutral-400">
-            {positive ? t.home.balanceTheyOwe : t.home.balanceYouOwe}
+            {owesYou ? t.home.balanceTheyOwe : t.home.balanceYouOwe}
           </span>
         )}
       </div>
