@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-noto-devanagari), var(--font-noto-sans), Arial, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+/* Amounts must always render in Latin numerals regardless of UI language. */
+.amount-numerals {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
