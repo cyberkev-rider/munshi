@@ -30,8 +30,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>(DEFAULT_LANGUAGE);
 
   useEffect(() => {
+    // Hydration-safe: localStorage isn't available during SSR, so the stored
+    // language preference can only be applied on mount, client-side. The
+    // set-state-in-effect rule doesn't model this intentional pattern.
     const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
     if (stored === "hi" || stored === "en") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLanguageState(stored);
     }
   }, []);

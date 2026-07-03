@@ -17,6 +17,8 @@ export function useParties() {
   }, []);
 
   useEffect(() => {
+    // Intentional fetch-on-mount; refresh() flips loading before awaiting.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
   }, [refresh]);
 

@@ -48,6 +48,8 @@ export function usePartiesWithBalances() {
   }, []);
 
   useEffect(() => {
+    // Intentional fetch-on-mount; refresh() flips loading before awaiting.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
   }, [refresh]);
 
@@ -72,6 +74,8 @@ export function usePartyLedger(partyId: string | undefined) {
   }, [partyId]);
 
   useEffect(() => {
+    // Intentional fetch-on-mount; refresh() flips loading before awaiting.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
   }, [refresh]);
 
