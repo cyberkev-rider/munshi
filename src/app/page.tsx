@@ -26,16 +26,15 @@ export default function HomePage() {
       </header>
 
       <main className="flex flex-1 flex-col gap-6 px-4 pb-6">
-        {/* Primary voice entry — visually dominant but stubbed for Step 1. */}
+        {/* Primary voice entry — visually dominant, wired up in Step 2. */}
         <div className="flex flex-col items-center gap-3 pt-2">
-          <button
-            type="button"
-            onClick={showComingSoonToast}
+          <Link
+            href="/voice"
             aria-label={t.home.micHint}
             className="flex h-32 w-32 items-center justify-center rounded-full bg-green-600 text-white shadow-lg shadow-green-600/30 active:bg-green-700"
           >
             <MicIcon className="h-16 w-16" />
-          </button>
+          </Link>
           <p className="text-center text-sm text-neutral-500">{t.home.micHint}</p>
         </div>
 

@@ -55,6 +55,8 @@ export async function createTransaction(
     direction: input.direction,
     note: input.note?.trim() || undefined,
     source: input.source ?? "manual",
+    raw_text: input.raw_text || undefined,
+    confidence: input.confidence,
     created_at: nowIso(),
     is_deleted: false,
     synced: false,

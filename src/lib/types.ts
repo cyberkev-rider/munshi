@@ -41,6 +41,16 @@ export interface Transaction {
   direction: TransactionDirection;
   note?: string;
   source: TransactionSource;
+  /** Step 2 (voice capture): the raw STT transcript this entry was parsed
+   * from. Only set when source === "voice". Kept verbatim (not translated)
+   * so the confirm screen can show it back to the user for a sanity check,
+   * and so a human can audit what the LLM extracted from. */
+  raw_text?: string;
+  /** Step 2 (voice capture): the LLM extraction's self-reported confidence
+   * (0-1) for this parse. Only set when source === "voice". Not used for
+   * anything beyond record-keeping once the user has confirmed/edited the
+   * entry — by the time it's saved, the user has already vetted the fields. */
+  confidence?: number;
   /** ISO-8601 timestamp string. */
   created_at: string;
   /** Soft-delete flag. Deleted transactions are excluded from balances and
@@ -58,4 +68,4 @@ export type NewTransaction = Pick<
   Transaction,
   "party_id" | "amount_paise" | "direction"
 > &
-  Partial<Pick<Transaction, "note" | "source">>;
+  Partial<Pick<Transaction, "note" | "source" | "raw_text" | "confidence">>;

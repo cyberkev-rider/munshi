@@ -48,7 +48,7 @@ export function MoneyOutIcon({ className }: IconProps) {
   );
 }
 
-/** Microphone icon for the (stubbed) voice-entry button. */
+/** Microphone icon for the voice-entry button. */
 export function MicIcon({ className }: IconProps) {
   return (
     <svg

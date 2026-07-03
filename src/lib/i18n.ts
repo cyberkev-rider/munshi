@@ -7,6 +7,8 @@
  * Usage: const { t } = useI18n(); ... t.home.title
  */
 
+import type { AiErrorCode } from "./ai-config";
+
 export type Language = "hi" | "en";
 
 export interface Strings {
@@ -18,6 +20,7 @@ export interface Strings {
     undo: string;
     back: string;
     comingSoon: string;
+    retry: string;
   };
   home: {
     title: string;
@@ -67,6 +70,21 @@ export interface Strings {
     dateToday: string;
     dateYesterday: string;
   };
+  voice: {
+    recordingHint: string;
+    stop: string;
+    uploading: string;
+    extracting: string;
+    youSaidLabel: string;
+    confirmTitle: string;
+    reviewBannerAmount: string;
+    reviewBannerParty: string;
+    llmSaid: string;
+    weHeard: string;
+    createPartyConfirm: string;
+    micPermissionDenied: string;
+    errors: Record<AiErrorCode, string>;
+  };
 }
 
 const hi: Strings = {
@@ -78,10 +96,11 @@ const hi: Strings = {
     undo: "पूर्ववत करें",
     back: "पीछे",
     comingSoon: "यह सुविधा जल्द आ रही है",
+    retry: "फिर कोशिश करें",
   },
   home: {
     title: "मुंशी",
-    micHint: "बोलकर लिखें (जल्द आ रहा है)",
+    micHint: "बोलकर एंट्री जोड़ें",
     photoHint: "बिल की फोटो (जल्द आ रहा है)",
     partiesTitle: "खाते",
     noParties: "अभी कोई खाता नहीं है। + दबाकर शुरू करें।",
@@ -127,6 +146,27 @@ const hi: Strings = {
     dateToday: "आज",
     dateYesterday: "कल",
   },
+  voice: {
+    recordingHint: "बोलिए...",
+    stop: "रोकें",
+    uploading: "भेजा जा रहा है...",
+    extracting: "समझा जा रहा है...",
+    youSaidLabel: "आपने कहा:",
+    confirmTitle: "जांच लें",
+    reviewBannerAmount: "राशि जांच लें",
+    reviewBannerParty: "यह नया व्यक्ति है",
+    llmSaid: "AI ने सुना",
+    weHeard: "हमने सुना",
+    createPartyConfirm: "नया व्यक्ति जोड़ें",
+    micPermissionDenied: "माइक की अनुमति दें",
+    errors: {
+      missing_api_key: "आवाज़ सुविधा अभी उपलब्ध नहीं है",
+      upstream_error: "कुछ गड़बड़ हुई, फिर कोशिश करें",
+      invalid_audio: "आवाज़ रिकॉर्ड नहीं हो पाई, फिर बोलें",
+      invalid_request: "कुछ गड़बड़ हुई, फिर कोशिश करें",
+      timeout: "जवाब में देर हो रही है, फिर कोशिश करें",
+    },
+  },
 };
 
 const en: Strings = {
@@ -138,10 +178,11 @@ const en: Strings = {
     undo: "Undo",
     back: "Back",
     comingSoon: "Coming soon",
+    retry: "Try again",
   },
   home: {
     title: "Munshi",
-    micHint: "Speak to add (coming soon)",
+    micHint: "Speak to add an entry",
     photoHint: "Photo of bill (coming soon)",
     partiesTitle: "Accounts",
     noParties: "No accounts yet. Tap + to start.",
@@ -186,6 +227,27 @@ const en: Strings = {
     noEntries: "No entries yet",
     dateToday: "Today",
     dateYesterday: "Yesterday",
+  },
+  voice: {
+    recordingHint: "Listening...",
+    stop: "Stop",
+    uploading: "Uploading...",
+    extracting: "Understanding...",
+    youSaidLabel: "You said:",
+    confirmTitle: "Confirm entry",
+    reviewBannerAmount: "Please check the amount",
+    reviewBannerParty: "This looks like a new contact",
+    llmSaid: "AI heard",
+    weHeard: "We heard",
+    createPartyConfirm: "Add new person",
+    micPermissionDenied: "Please allow microphone access",
+    errors: {
+      missing_api_key: "Voice feature is not available right now",
+      upstream_error: "Something went wrong, please try again",
+      invalid_audio: "Couldn't record audio, please try again",
+      invalid_request: "Something went wrong, please try again",
+      timeout: "This is taking too long, please try again",
+    },
   },
 };
 
