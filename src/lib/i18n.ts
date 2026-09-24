@@ -21,6 +21,9 @@ export interface Strings {
     back: string;
     comingSoon: string;
     retry: string;
+    /** aria-label for every SpeakButton and other tap-to-hear affordance
+     * (Step 3 read-back) — doubles as "speak" and "replay". */
+    listen: string;
   };
   home: {
     title: string;
@@ -84,6 +87,22 @@ export interface Strings {
     createPartyConfirm: string;
     micPermissionDenied: string;
     errors: Record<AiErrorCode, string>;
+    /** Step 3: label on the big mic button that answers a spoken
+     * clarifying question. */
+    answerByVoice: string;
+    /** Step 3: shown while recording the answer to a clarifying question
+     * (distinct from `recordingHint`, which is the main entry recording). */
+    listening: string;
+    /** Step 3: shown while transcribing the answer recording. */
+    processingAnswer: string;
+    /** Step 3: shown when the answer recording had nothing usable in it —
+     * the clarifying question is re-spoken and the field is left for
+     * manual editing. */
+    notUnderstood: string;
+    /** Step 3: label for the confirm screen's red ✗ button ("that parse
+     * isn't right, record the whole entry again") — distinct from
+     * `common.cancel`, which discards/exits instead. */
+    notRight: string;
   };
 }
 
@@ -97,6 +116,7 @@ const hi: Strings = {
     back: "पीछे",
     comingSoon: "यह सुविधा जल्द आ रही है",
     retry: "फिर कोशिश करें",
+    listen: "सुनें",
   },
   home: {
     title: "मुंशी",
@@ -166,6 +186,11 @@ const hi: Strings = {
       invalid_request: "कुछ गड़बड़ हुई, फिर कोशिश करें",
       timeout: "जवाब में देर हो रही है, फिर कोशिश करें",
     },
+    answerByVoice: "बोलकर जवाब दें",
+    listening: "सुन रहे हैं...",
+    processingAnswer: "समझा जा रहा है...",
+    notUnderstood: "समझ नहीं आया, फिर बोलिए",
+    notRight: "सही नहीं",
   },
 };
 
@@ -179,6 +204,7 @@ const en: Strings = {
     back: "Back",
     comingSoon: "Coming soon",
     retry: "Try again",
+    listen: "Listen",
   },
   home: {
     title: "Munshi",
@@ -248,6 +274,11 @@ const en: Strings = {
       invalid_request: "Something went wrong, please try again",
       timeout: "This is taking too long, please try again",
     },
+    answerByVoice: "Answer by voice",
+    listening: "Listening...",
+    processingAnswer: "Processing...",
+    notUnderstood: "Didn't catch that, please try again",
+    notRight: "Not right",
   },
 };
 

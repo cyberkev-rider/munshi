@@ -7,8 +7,10 @@ import { useI18n } from "@/lib/i18n-context";
 import { usePartyLedger } from "@/lib/useLedgerData";
 import { getParty, softDeleteTransaction, undoDeleteTransaction } from "@/lib/repo";
 import { formatPaiseToRupees, theyOweYou } from "@/lib/ledger";
+import { balanceText } from "@/lib/readback";
 import { useSnackbar } from "@/components/Snackbar";
 import { TransactionRow } from "@/components/TransactionRow";
+import { SpeakButton } from "@/components/SpeakButton";
 import { BackIcon, PlusIcon } from "@/components/icons";
 import type { Party } from "@/lib/types";
 
@@ -16,7 +18,7 @@ export default function PartyLedgerPage() {
   const params = useParams<{ id: string }>();
   const partyId = typeof params.id === "string" ? params.id : undefined;
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { show } = useSnackbar();
 
   const [party, setParty] = useState<Party | null | undefined>(undefined);
@@ -59,7 +61,12 @@ export default function PartyLedgerPage() {
       </header>
 
       <div className="flex flex-col items-center gap-1 border-b border-neutral-100 px-4 py-5">
-        <span className="text-sm text-neutral-400">{t.ledger.balanceTitle}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-neutral-400">{t.ledger.balanceTitle}</span>
+          {party && (
+            <SpeakButton text={balanceText(party.name, balancePaise, language)} lang={language} />
+          )}
+        </div>
         <span
           className={`amount-numerals text-4xl font-extrabold ${
             isZero ? "text-neutral-500" : owesYou ? "text-green-600" : "text-red-600"
@@ -81,7 +88,12 @@ export default function PartyLedgerPage() {
           </p>
         )}
         {transactions.map((tx) => (
-          <TransactionRow key={tx.id} transaction={tx} onDelete={handleDelete} />
+          <TransactionRow
+            key={tx.id}
+            transaction={tx}
+            partyName={party?.name ?? ""}
+            onDelete={handleDelete}
+          />
         ))}
       </main>
 

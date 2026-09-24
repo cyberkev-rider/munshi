@@ -66,6 +66,29 @@ export function MicIcon({ className }: IconProps) {
   );
 }
 
+/** Speaker icon for the text-to-speech read-back button (Step 3). */
+export function SpeakerIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 48 48"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden="true"
+    >
+      <path
+        d="M6 18h8l10-9v30l-10-9h-8z"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <path d="M31 17a10 10 0 0 1 0 14" stroke="currentColor" strokeWidth="3" strokeLinecap="round" fill="none" />
+      <path d="M37 11a17 17 0 0 1 0 26" stroke="currentColor" strokeWidth="3" strokeLinecap="round" fill="none" />
+    </svg>
+  );
+}
+
 /** Camera icon for the (stubbed) photo-of-bill button. */
 export function CameraIcon({ className }: IconProps) {
   return (
@@ -162,6 +185,21 @@ export function PersonIcon({ className }: IconProps) {
   );
 }
 
+/** Pencil icon marking an optional written note on an entry. */
+export function PencilIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 48 48"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M34 6a5.66 5.66 0 0 1 8 8L15 41 4 44l3-11L34 6z" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
+  );
+}
+
 /** Checkmark icon for confirmation screens. */
 export function CheckIcon({ className }: IconProps) {
   return (
@@ -174,6 +212,24 @@ export function CheckIcon({ className }: IconProps) {
     >
       <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="3" fill="none" />
       <path d="M15 24l6 6 12-13" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
+  );
+}
+
+/** Cross (X) icon for "not right" / cancel actions on confirm screens.
+ * Pairs with CheckIcon (same circle radius) so the two read as a matched
+ * yes/no pair at a glance. */
+export function CrossIcon({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 48 48"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden="true"
+    >
+      <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="3" fill="none" />
+      <path d="M17 17l14 14M31 17l-14 14" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
     </svg>
   );
 }

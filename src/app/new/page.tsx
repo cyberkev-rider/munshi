@@ -7,20 +7,23 @@
  *   1. party    — pick an existing party or create a new one
  *   2. amount   — huge custom number pad, amount shown large, rupees in
  *   3. direction — two huge buttons: green "पैसे आए" / red "पैसे दिए"
- *   4. confirm  — review icons + amount + party, then save
+ *   4. confirm  — review icons + amount + party, optional note, then save
  *
  * On save: write to Dexie via repo.ts, show an undo snackbar, and return to
  * Home. Undo fully removes the just-created transaction.
  */
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n-context";
 import { useParties } from "@/lib/useParties";
 import { createParty, createTransaction, deleteTransactionPermanently } from "@/lib/repo";
 import { formatPaiseToRupees, parseAmountInputToPaise } from "@/lib/ledger";
+import { confirmationText } from "@/lib/readback";
+import { useSpeech } from "@/lib/speech";
 import { useSnackbar } from "@/components/Snackbar";
 import { NumberPad } from "@/components/NumberPad";
+import { SpeakButton } from "@/components/SpeakButton";
 import {
   BackIcon,
   MoneyInIcon,
@@ -28,7 +31,10 @@ import {
   PersonIcon,
   PlusIcon,
   CheckIcon,
+  CrossIcon,
+  PencilIcon,
 } from "@/components/icons";
+import type { Language } from "@/lib/i18n";
 import type { Party, TransactionDirection } from "@/lib/types";
 
 type Step = "party" | "amount" | "direction" | "confirm";
@@ -37,14 +43,16 @@ const MAX_AMOUNT_DIGITS_BEFORE_DECIMAL = 8; // guards against absurd typos, not 
 
 export default function NewEntryPage() {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { show } = useSnackbar();
+  const { speak } = useSpeech();
   const { parties, loading: partiesLoading, refresh: refreshParties } = useParties();
 
   const [step, setStep] = useState<Step>("party");
   const [selectedParty, setSelectedParty] = useState<Party | null>(null);
   const [amountInput, setAmountInput] = useState("");
   const [direction, setDirection] = useState<TransactionDirection | null>(null);
+  const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
 
   const [nameQuery, setNameQuery] = useState("");
@@ -60,6 +68,23 @@ export default function NewEntryPage() {
   );
 
   const amountPaise = parseAmountInputToPaise(amountInput);
+
+  // The spoken confirm-screen sentence — computed once here so both the
+  // auto-speak effect below and the SpeakButton's replay use the exact
+  // same text.
+  const spokenConfirmation = useMemo(() => {
+    if (!selectedParty || !direction) return "";
+    return confirmationText({ party: selectedParty.name, amountPaise, direction }, language);
+  }, [selectedParty, direction, amountPaise, language]);
+
+  // Auto-speak as soon as the confirm step is entered (per the product
+  // spec: every entry must be readable back BY EAR). Only re-fires when
+  // `step` itself changes — not on every keystroke in the note field.
+  useEffect(() => {
+    if (step === "confirm" && spokenConfirmation) {
+      void speak(spokenConfirmation, language);
+    }
+  }, [step, spokenConfirmation, speak, language]);
 
   function goBack() {
     if (step === "amount") setStep("party");
@@ -125,6 +150,7 @@ export default function NewEntryPage() {
         party_id: selectedParty.id,
         amount_paise: amountPaise,
         direction,
+        note: note.trim() || undefined,
         source: "manual",
       });
       show(t.snackbar.saved, {
@@ -133,10 +159,21 @@ export default function NewEntryPage() {
           deleteTransactionPermanently(created.id);
         },
       });
+      // Fire-and-forget: speech.ts's player is a module-level singleton, so
+      // this keeps playing across the router.push below even though this
+      // component unmounts.
+      void speak(t.snackbar.saved, language);
       router.push("/");
     } finally {
       setSaving(false);
     }
+  }
+
+  /** The confirm step's red ✗: nothing has been persisted yet at this
+   * point (createTransaction only runs in handleSave), so "discard" is
+   * simply abandoning the draft and returning home — no undo needed. */
+  function handleDiscardConfirm() {
+    router.push("/");
   }
 
   return (
@@ -183,8 +220,13 @@ export default function NewEntryPage() {
           party={selectedParty}
           amountPaise={amountPaise}
           direction={direction}
+          note={note}
+          onNoteChange={setNote}
           saving={saving}
           onSave={handleSave}
+          onDiscard={handleDiscardConfirm}
+          spokenText={spokenConfirmation}
+          language={language}
         />
       )}
     </div>
@@ -338,17 +380,35 @@ interface ConfirmStepProps {
   party: Party;
   amountPaise: number;
   direction: TransactionDirection;
+  note: string;
+  onNoteChange: (note: string) => void;
   saving: boolean;
   onSave: () => void;
+  onDiscard: () => void;
+  spokenText: string;
+  language: Language;
 }
 
-function ConfirmStep({ party, amountPaise, direction, saving, onSave }: ConfirmStepProps) {
+function ConfirmStep({
+  party,
+  amountPaise,
+  direction,
+  note,
+  onNoteChange,
+  saving,
+  onSave,
+  onDiscard,
+  spokenText,
+  language,
+}: ConfirmStepProps) {
   const { t } = useI18n();
   const isReceived = direction === "received";
 
   return (
     <div className="flex flex-1 flex-col justify-between px-4 pb-4">
       <div className="flex flex-1 flex-col items-center justify-center gap-6">
+        <SpeakButton text={spokenText} lang={language} />
+
         <span
           className={`flex h-24 w-24 items-center justify-center rounded-full ${
             isReceived ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"
@@ -382,17 +442,42 @@ function ConfirmStep({ party, amountPaise, direction, saving, onSave }: ConfirmS
             {isReceived ? t.direction.received : t.direction.paid}
           </span>
         </div>
+
+        <label className="flex w-full flex-col items-center gap-1">
+          <span className="text-sm text-neutral-400">{t.confirm.noteLabel}</span>
+          <span className="flex min-h-[56px] w-full items-center gap-2 rounded-2xl border-2 border-neutral-200 px-4 focus-within:border-green-600">
+            <PencilIcon className="h-6 w-6 shrink-0 text-neutral-400" />
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => onNoteChange(e.target.value)}
+              placeholder={t.confirm.notePlaceholder}
+              className="min-w-0 flex-1 bg-transparent text-lg focus:outline-none"
+            />
+          </span>
+        </label>
       </div>
 
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={saving}
-        className="flex min-h-[64px] items-center justify-center gap-2 rounded-2xl bg-neutral-900 text-lg font-bold text-white disabled:opacity-60 active:bg-neutral-800"
-      >
-        <CheckIcon className="h-6 w-6" />
-        {t.confirm.save}
-      </button>
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={onDiscard}
+          disabled={saving}
+          className="flex min-h-[64px] flex-1 items-center justify-center gap-2 rounded-2xl bg-red-600 text-lg font-bold text-white disabled:opacity-60 active:bg-red-700"
+        >
+          <CrossIcon className="h-7 w-7" />
+          {t.common.cancel}
+        </button>
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="flex min-h-[64px] flex-1 items-center justify-center gap-2 rounded-2xl bg-green-600 text-lg font-bold text-white disabled:opacity-60 active:bg-green-700"
+        >
+          <CheckIcon className="h-7 w-7" />
+          {t.confirm.save}
+        </button>
+      </div>
     </div>
   );
 }
