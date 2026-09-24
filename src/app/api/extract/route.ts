@@ -1,9 +1,11 @@
 /**
  * POST /api/extract — server-side call to Claude that turns a raw STT
  * transcript into a structured transaction: { party, amount_paise,
- * direction, note, confidence }. Uses the @anthropic-ai/sdk with a strict
- * tool schema so the model's output is guaranteed-parseable JSON (no
- * free-text parsing on our end).
+ * direction, note, confidence }. Uses the @anthropic-ai/sdk's structured
+ * outputs (`output_config: { format: { type: "json_schema", schema } }`)
+ * so the model's reply is a JSON object matching our schema — read off the
+ * response's `text` content block and JSON.parse'd, no tool-use
+ * indirection and no free-text parsing on our end.
  *
  * ANTHROPIC_API_KEY lives only in this server-side module and is never sent
  * to the client. Model defaults to claude-sonnet-5, overridable via
@@ -11,9 +13,14 @@
  *
  * The route also cross-checks the LLM's amount against a deterministic
  * parse of the transcript (src/lib/hindi-numbers.ts via extract-helpers.ts)
- * and fuzzy-matches the extracted party name against the caller-supplied
- * list of existing parties, so "Ramesh bhai" resolves to an existing
- * "Ramesh" party rather than creating a duplicate.
+ * and asks the model itself to cross-script/spelling/honorific-match the
+ * extracted party name against the caller-supplied list of existing
+ * parties (the `existing_party` field, whose prompt/schema is shared with
+ * /api/match-party — see src/lib/party-match.ts), falling back to
+ * extract-helpers.ts's own local fuzzy matchPartyName when the model
+ * doesn't recognize a match. This is what lets e.g. Devanagari "सुरेश"
+ * resolve to an existing Latin-spelled "Suresh" party rather than creating
+ * a duplicate.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -21,51 +28,49 @@ import Anthropic from "@anthropic-ai/sdk";
 import { isMockMode, aiError, statusForError } from "@/lib/ai-config";
 import { MOCK_EXTRACTION } from "@/lib/ai-mock-data";
 import { buildExtractResult, type RawExtraction } from "@/lib/extract-helpers";
+import { EXISTING_PARTY_SCHEMA_PROPERTY, formatExistingPartyListLine, PARTY_MATCH_INSTRUCTIONS } from "@/lib/party-match";
 
 export const runtime = "nodejs";
 
 const DEFAULT_MODEL = "claude-sonnet-5";
 
-/** Strict tool schema forcing the model's reply into exactly the shape
- * extract-helpers.ts expects. `strict: true` guarantees the API validates
- * tool_use.input against this schema before returning it to us. */
-const EXTRACT_TOOL: Anthropic.Tool = {
-  name: "record_transaction",
-  description:
-    "Records the single money transaction described in the shopkeeper's voice transcript.",
-  input_schema: {
-    type: "object",
-    properties: {
-      party: {
-        type: "string",
-        description:
-          "The name of the person/business money was exchanged with, as spoken (e.g. 'Ramesh', 'Suresh bhai'). If genuinely no name is mentioned, use an empty string.",
-      },
-      amount_paise: {
-        type: "integer",
-        description: "The transaction amount in integer paise (rupees * 100). E.g. 500 rupees -> 50000.",
-      },
-      direction: {
-        type: "string",
-        enum: ["paid", "received"],
-        description:
-          "'paid' if the shop owner GAVE money (diye/de diye/bheje); 'received' if the shop owner GOT money (aaye/mile/liye).",
-      },
-      note: {
-        type: "string",
-        description:
-          "Short narration of anything beyond party+amount+direction: goods bought/sold, udhaar (credit) remarks, reasons, etc. Empty string if there is nothing extra to note.",
-      },
-      confidence: {
-        type: "number",
-        description:
-          "Your confidence (0.0 to 1.0) that party, amount_paise, and direction were all extracted correctly from a possibly noisy transcript.",
-      },
+/** Structured-output schema forcing the model's reply into exactly the
+ * shape extract-helpers.ts expects. additionalProperties: false plus every
+ * field listed as required guarantees the parsed JSON always has all six
+ * fields, even when the model has nothing useful to say for one of them
+ * (empty string / low confidence rather than an omitted field). */
+const EXTRACT_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    party: {
+      type: "string",
+      description:
+        "The name of the person/business money was exchanged with, exactly AS SPOKEN in the transcript (e.g. 'Ramesh', 'Suresh bhai', 'सुरेश') — never rewritten to an existing party's spelling (see existing_party for that). If genuinely no name is mentioned, use an empty string.",
     },
-    required: ["party", "amount_paise", "direction", "note", "confidence"],
-    additionalProperties: false,
+    existing_party: EXISTING_PARTY_SCHEMA_PROPERTY,
+    amount_paise: {
+      type: "integer",
+      description: "The transaction amount in integer paise (rupees * 100). E.g. 500 rupees -> 50000.",
+    },
+    direction: {
+      type: "string",
+      enum: ["paid", "received"],
+      description:
+        "'paid' if the shop owner GAVE money (diye/de diye/bheje); 'received' if the shop owner GOT money (aaye/mile/liye).",
+    },
+    note: {
+      type: "string",
+      description:
+        "Short narration of anything beyond party+amount+direction: goods bought/sold, udhaar (credit) remarks, reasons, etc. Empty string if there is nothing extra to note.",
+    },
+    confidence: {
+      type: "number",
+      description:
+        "Your confidence (0.0 to 1.0) that party, amount_paise, and direction were all extracted correctly from a possibly noisy transcript.",
+    },
   },
-  strict: true,
+  required: ["party", "existing_party", "amount_paise", "direction", "note", "confidence"],
+  additionalProperties: false,
 };
 
 const SYSTEM_PROMPT = `You are an expert at extracting structured bookkeeping entries from Hindi/Hinglish voice transcripts dictated by small Indian shopkeepers. The transcripts come from speech-to-text and may mix Devanagari and Latin script, mix Hindi and English words, and contain spoken Indian number words.
@@ -93,9 +98,11 @@ Few-shot examples:
 6. "paune do sau Mohan se aaye" -> party: "Mohan", amount_paise: 17500, direction: "received", note: ""
 7. "dedh lakh rupaye ka order Ramesh ko diya" -> party: "Ramesh", amount_paise: 15000000, direction: "paid", note: "order"
 
-You will also be given a list of the shopkeeper's existing party (contact) names. If the transcript's spoken name is clearly the same person as an existing party under a slightly different form (e.g. "Ramesh bhai" for existing party "Ramesh"), extract the name AS SPOKEN in the transcript — the caller will fuzzy-match it against the existing list itself. Do not silently rewrite the spoken name to the existing party's exact spelling.
+${PARTY_MATCH_INSTRUCTIONS}
 
-Always call the record_transaction tool exactly once with your best extraction. If the transcript is too garbled to extract a party name or amount at all, still call the tool: use an empty string for party and/or a best-guess amount_paise, and set confidence low (below 0.5) so the app knows to ask the user to fix it.`;
+The party field above is always the name AS SPOKEN (script, spelling, honorific and all) — never rewritten to match an existing spelling. existing_party is judged separately, per the rules just given.
+
+Always respond with your best extraction, following the JSON schema exactly. If the transcript is too garbled to extract a party name or amount at all, still respond: use an empty string for party (and "" for existing_party) and/or a best-guess amount_paise, and set confidence low (below 0.5) so the app knows to ask the user to fix it.`;
 
 interface ExtractRequestBody {
   transcript?: string;
@@ -135,19 +142,23 @@ export async function POST(request: NextRequest) {
   const client = new Anthropic({ apiKey });
   const model = process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
 
-  const partyListLine =
-    existingPartyNames.length > 0
-      ? `Existing party names: ${existingPartyNames.join(", ")}`
-      : "Existing party names: (none yet)";
+  const partyListLine = formatExistingPartyListLine(existingPartyNames);
 
   let response: Anthropic.Message;
   try {
     response = await client.messages.create({
       model,
-      max_tokens: 1024,
+      // claude-sonnet-5 runs adaptive thinking by default, which counts
+      // against max_tokens — 1024 risked truncating the JSON output before
+      // it ever reached the final answer.
+      max_tokens: 4096,
       system: SYSTEM_PROMPT,
-      tools: [EXTRACT_TOOL],
-      tool_choice: { type: "tool", name: "record_transaction" },
+      output_config: {
+        format: {
+          type: "json_schema",
+          schema: EXTRACT_OUTPUT_SCHEMA,
+        },
+      },
       messages: [
         {
           role: "user",
@@ -167,16 +178,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(err, { status: statusForError(err.error) });
   }
 
-  const toolUse = response.content.find(
-    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
-  );
-
-  if (!toolUse) {
-    const err = aiError("upstream_error", "Claude did not return a tool_use block");
+  if (response.stop_reason === "max_tokens") {
+    const err = aiError("upstream_error", "Claude's structured output was truncated (max_tokens)");
     return NextResponse.json(err, { status: statusForError(err.error) });
   }
 
-  const raw = toolUse.input as RawExtraction;
+  const textBlock = response.content.find((block): block is Anthropic.TextBlock => block.type === "text");
+
+  if (!textBlock) {
+    const err = aiError("upstream_error", "Claude did not return a text block");
+    return NextResponse.json(err, { status: statusForError(err.error) });
+  }
+
+  let raw: RawExtraction;
+  try {
+    raw = JSON.parse(textBlock.text) as RawExtraction;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const body2 = aiError("upstream_error", `Claude returned malformed structured output: ${message}`);
+    return NextResponse.json(body2, { status: statusForError(body2.error) });
+  }
+
   const result = buildExtractResult(raw, transcript, existingPartyNames);
 
   return NextResponse.json(result);

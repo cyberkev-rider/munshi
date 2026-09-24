@@ -16,6 +16,7 @@ export const MOCK_LANGUAGE = "hi-IN";
  * first few-shot example exactly. */
 export const MOCK_EXTRACTION: RawExtraction = {
   party: "Ramesh",
+  existing_party: "",
   amount_paise: 50_000,
   direction: "paid",
   note: "",

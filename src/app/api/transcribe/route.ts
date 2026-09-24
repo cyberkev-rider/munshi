@@ -25,6 +25,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isMockMode, aiError, statusForError } from "@/lib/ai-config";
 import { MOCK_TRANSCRIPT, MOCK_LANGUAGE } from "@/lib/ai-mock-data";
+import { normalizeAudioUpload } from "@/lib/audio-upload";
 
 export const runtime = "nodejs";
 
@@ -68,11 +69,8 @@ export async function POST(request: NextRequest) {
   }
 
   const sarvamForm = new FormData();
-  // Sarvam infers the codec from the uploaded file; the client records in
-  // whatever mime type MediaRecorder.isTypeSupported() picked (webm/opus is
-  // preferred, ogg/opus as fallback — see useVoiceRecorder.ts).
-  const filename = audio.type.includes("ogg") ? "audio.ogg" : "audio.webm";
-  sarvamForm.append("file", audio, filename);
+  const { contentType, filename } = normalizeAudioUpload(audio.type);
+  sarvamForm.append("file", audio.slice(0, audio.size, contentType), filename);
   sarvamForm.append("model", "saaras:v3");
   sarvamForm.append("mode", "codemix");
 

@@ -1,9 +1,11 @@
 /**
  * Pure helper logic for the /api/extract route: cross-checking the LLM's
  * extracted amount against a deterministic parse of the transcript
- * (hindi-numbers.ts), fuzzy-matching an extracted party name against the
- * app's existing party list, and shaping the final ExtractResult the client
- * consumes.
+ * (hindi-numbers.ts), resolving an extracted party name against the app's
+ * existing party list (the model's own existing_party guess when it's an
+ * exact list member, else a local fuzzy match), sanitizing stray junk out
+ * of model-produced text fields, and shaping the final ExtractResult the
+ * client consumes.
  *
  * Kept separate from the route handler (route.ts) so this logic — which is
  * genuinely just data transformation, no I/O — can be unit tested directly
@@ -12,10 +14,17 @@
  */
 
 import { parseLargestSpokenAmount } from "./hindi-numbers";
+import { acceptExistingParty } from "./party-match";
 
-/** Shape the LLM's tool call returns (see route.ts's tool schema). */
+/** Shape of the LLM's structured-output JSON (see route.ts's output
+ * schema). */
 export interface RawExtraction {
   party: string;
+  /** The model's own best guess at which existing party (if any) this is
+   * — see src/lib/party-match.ts. Only ever trusted when it EXACTLY
+   * matches a member of the caller's existingPartyNames; buildExtractResult
+   * falls back to matchPartyName below otherwise. */
+  existing_party: string;
   amount_paise: number;
   direction: "paid" | "received";
   note: string;
@@ -137,6 +146,32 @@ export function matchPartyName(
 }
 
 /**
+ * Matches an HTML/XML-ish tag-like fragment: "<foo>", "</foo>", or a
+ * malformed one like "</antmlःparameter>" — including when the "tag name"
+ * contains non-ASCII characters. Guards against a real failure mode seen
+ * in live testing: a forced-tool-call empty-string serialization glitch
+ * that occasionally leaked a stray closing-tag fragment into a string
+ * parameter instead of a genuine empty string. Deliberately simple (any
+ * `<...>`-shaped run with no internal whitespace) — this domain (spoken
+ * Hindi/Hinglish bookkeeping notes) never legitimately contains literal
+ * angle-bracket markup, so there's no real content this could clobber.
+ */
+const TAG_LIKE_PATTERN = /<\/?[^\s<>][^<>]*>/gu;
+
+/**
+ * Defensive last-line sanitizer for a model-produced string field (party or
+ * note): strips any tag-like fragment (see TAG_LIKE_PATTERN), collapses any
+ * resulting run of whitespace to a single space, and trims. A pure
+ * function — legitimate content (Devanagari, Hinglish, punctuation) that
+ * never happens to look like a tag passes through completely unchanged.
+ * null/undefined are treated as an empty string.
+ */
+export function sanitizeModelText(value: string | null | undefined): string {
+  if (!value) return "";
+  return value.replace(TAG_LIKE_PATTERN, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
  * Validates a raw LLM extraction has usable required fields. Returns a list
  * of problems (empty = all good). Used to force needsReview=true even when
  * the model reports high confidence but produced something unusable (e.g.
@@ -155,32 +190,58 @@ export function validateExtraction(raw: Partial<RawExtraction>): string[] {
 /**
  * Assembles the final ExtractResult from a raw LLM extraction, the original
  * transcript (for amount cross-checking), and the app's existing party
- * names (for fuzzy matching). This is the single place that combines all
- * three helpers above — the route handler calls this and returns the
- * result as JSON.
+ * names (for matching). This is the single place that combines all the
+ * helpers above — the route handler calls this and returns the result as
+ * JSON.
+ *
+ * Party resolution order: (1) if the model's own existing_party guess
+ * EXACTLY matches (case-insensitively) a member of existingPartyNames,
+ * trust it and use that member's canonical spelling — this is what lets a
+ * cross-script/differently-spelled/honorific-carrying spoken name (e.g.
+ * Devanagari "सुरेश") resolve to an existing Latin-spelled party. (2)
+ * Otherwise fall back to matchPartyName's local fuzzy match on the
+ * (sanitized) `party` field. existing_party is NEVER trusted on its own
+ * merits — only exact list membership counts — so a hallucinated or junk
+ * value degrades gracefully to the same fallback used before this field
+ * existed.
+ *
+ * `party` and `note` are run through sanitizeModelText first (see its doc)
+ * so a stray tag-like serialization artifact never reaches the user or
+ * pollutes matching/validation — notably, a party that sanitizes down to
+ * "" correctly trips validateExtraction's "missing party" check below.
  */
 export function buildExtractResult(
   raw: RawExtraction,
   transcript: string,
   existingPartyNames: readonly string[]
 ): ExtractResult {
-  const problems = validateExtraction(raw);
+  const sanitized: RawExtraction = {
+    ...raw,
+    party: sanitizeModelText(raw.party),
+    note: sanitizeModelText(raw.note),
+  };
 
-  const { name, matched } = matchPartyName(raw.party ?? "", existingPartyNames);
+  const problems = validateExtraction(sanitized);
+
+  const acceptedExisting = acceptExistingParty(raw.existing_party, existingPartyNames);
+  const { name, matched } = acceptedExisting
+    ? { name: acceptedExisting, matched: true }
+    : matchPartyName(sanitized.party ?? "", existingPartyNames);
+
   const { amount_paise, disagreement, confidencePenalty } = crossCheckAmount(
     transcript,
-    raw.amount_paise ?? 0
+    sanitized.amount_paise ?? 0
   );
 
-  const adjustedConfidence = Math.max(0, Math.min(1, (raw.confidence ?? 0) - confidencePenalty));
+  const adjustedConfidence = Math.max(0, Math.min(1, (sanitized.confidence ?? 0) - confidencePenalty));
   const needsReview = problems.length > 0 || adjustedConfidence < CONFIDENCE_REVIEW_THRESHOLD;
 
   return {
     party: name,
     partyMatched: matched,
     amount_paise,
-    direction: raw.direction === "paid" || raw.direction === "received" ? raw.direction : "paid",
-    note: raw.note ?? "",
+    direction: sanitized.direction === "paid" || sanitized.direction === "received" ? sanitized.direction : "paid",
+    note: sanitized.note ?? "",
     confidence: adjustedConfidence,
     needsReview,
     amountDisagreement: disagreement,
